@@ -68,7 +68,7 @@ const C_CSS = '.gch-menu{display:flex;flex-direction:column;align-items:flex-end
   // One highlighted option at a time ([data-on]); mouse, arrows and wheel all move it, F / Enter pick it.
   // The second selector outranks the per-style rules below, so every style shows the highlight.
   '.gch-opt[data-on],.gf-arena[data-style] .gch-opt[data-on]{background:var(--coral,#F2603C);color:var(--on-coral,#fff)}.gch-opt[data-on]::before{background:currentColor}.gch-opt:focus{outline:none}' +
-  '@media(hover:hover) and (pointer:fine){.gch-opt[data-on]::after{content:"F";margin-left:auto;padding:0 .4em;border:1px solid currentColor;border-radius:.25em;font-size:.78em;line-height:1.5;opacity:.85}}' +
+  '@media(hover:hover) and (pointer:fine){.gch-opt[data-on]::after{content:attr(data-k);margin-left:auto;padding:0 .4em;border:1px solid currentColor;border-radius:.25em;font-size:.78em;line-height:1.5;opacity:.85}}' +
   A('aurora') + '.gch-opt{clip-path:none;border-radius:999px;background:color-mix(in srgb,var(--ink-2,#171334) 62%,rgba(255,255,255,.10));-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}' +
   A('bloom') + '.gch-opt{clip-path:none;border-radius:999px;background:var(--surface,#fff);color:var(--on-surface,#16233A);border-color:transparent;box-shadow:0 .2em .7em rgba(22,35,58,.25)}' +
   A('signal') + '.gch-opt{clip-path:none;border-radius:0;border-width:0 0 0 3px;border-color:var(--coral,#C8FF3D);background:color-mix(in srgb,var(--ink-2,#0C0D10) 90%,transparent);box-shadow:none}' +
@@ -83,16 +83,17 @@ const C_JE_NEW = 'let __gchB=null,__gchM=null,__gchK=null;' +
   'let m=document.createElement("div");m.className="gch-menu";try{l&&(m.style.fontSize=getComputedStyle(l).fontSize)}catch{}m.setAttribute("role","group");m.setAttribute("aria-label","Reply");' +
   // One stylesheet per player, in .root beside (not inside) .vn, so readers of the VN text never see CSS.
   'let st=o&&o.querySelector("style[data-gch]");if(o&&!st){st=document.createElement("style");st.setAttribute("data-gch","");st.textContent=' + JSON.stringify(C_CSS) + ';o.prepend(st)}' +
-  'for(let x of os){let b=document.createElement("button");b.type="button";b.className="gch-opt";b.textContent=String(x.label);' +
+  'let kc="KeyF",kl="F";try{kc=localStorage.getItem("gch-key-code")||kc;kl=localStorage.getItem("gch-key-label")||kl}catch{}for(let x of os){let b=document.createElement("button");b.type="button";b.className="gch-opt";b.textContent=String(x.label);b.setAttribute("data-k",kl);' +
   'b.addEventListener("click",ev=>{ev.stopPropagation();__gchX();__gchB={l:x.lines.map(y=>{let z={...s,speaker:String(y.speaker||""),text:String(y.text||"")};delete z.choice;y.thought?z.thought=!0:delete z.thought;return z}),k:0};Ee(__gchB.l[0],!0)});m.append(b)}' +
   'm.addEventListener("click",ev=>ev.stopPropagation());' +
   'let dk=n.parentNode,bar=dk.querySelector(".vn-bar");dk.insertBefore(m,bar&&bar.parentNode===dk?bar:n);__gchM=m;h&&(h.hidden=!0);' +
   // Keys and wheel only while the menu is open, and never while typing or reading the backlog (b is the log box).
-  // F is matched by key position (KeyF), so it also works with the Korean input mode on.
+  // The pick key (F unless changed in the settings tab) is matched by key position (KeyF), so it also works
+  // with the Korean input mode on; Enter always picks too.
   'let bs=[...m.querySelectorAll(".gch-opt")],cur=0,mark=i=>{cur=(i+bs.length)%bs.length;bs.forEach((x,j)=>j===cur?x.setAttribute("data-on",""):x.removeAttribute("data-on"));try{bs[cur].focus({preventScroll:!0})}catch{}};' +
   'bs.forEach((x,j)=>x.addEventListener("pointerenter",()=>mark(j)));mark(0);' +
   'let off=ev=>{let t=ev.composedPath?ev.composedPath()[0]:ev.target;return!__gchM||b&&!b.hidden||t&&(t.isContentEditable||/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))},' +
-  'kd=ev=>{if(ev.ctrlKey||ev.metaKey||ev.altKey||off(ev))return;if(ev.key==="ArrowDown"||ev.key==="ArrowUp")mark(cur+(ev.key==="ArrowDown"?1:-1));else if(ev.code==="KeyF"||ev.key==="Enter")bs[cur].click();else return;ev.preventDefault();ev.stopImmediatePropagation()},' +
+  'kd=ev=>{if(ev.ctrlKey||ev.metaKey||ev.altKey||off(ev))return;if(ev.key==="ArrowDown"||ev.key==="ArrowUp")mark(cur+(ev.key==="ArrowDown"?1:-1));else if(ev.code===kc||ev.key==="Enter")bs[cur].click();else return;ev.preventDefault();ev.stopImmediatePropagation()},' +
   'acc=0,wh=ev=>{if(off(ev))return;ev.preventDefault();acc+=ev.deltaY;if(Math.abs(acc)>=40){mark(cur+(acc>0?1:-1));acc=0}},wt=o||G;' +
   'document.addEventListener("keydown",kd,!0);wt&&wt.addEventListener("wheel",wh,{passive:!1});' +
   '__gchK=()=>{document.removeEventListener("keydown",kd,!0);wt&&wt.removeEventListener("wheel",wh,{passive:!1})};return!0}' +

@@ -1,4 +1,4 @@
-/* Gacha Choice v1.2.0 — personal extension for Gacha Forge 1.8.13 on Marinara Engine.
+/* Gacha Choice v1.3.0 — personal extension for Gacha Forge 1.8.13 on Marinara Engine.
  * Adds "대답 선택지" to the game's Settings rail, with its own page drawn from the game's classes
  * (st-sect / st-plate / st-chips / st-chip) so it follows the chosen UI style. The page reads and sets how often
  * new story beats get a reply choice; the choices themselves are made and shown by gacha-choice-runtime.cjs.
@@ -22,7 +22,7 @@
   const ABOUT = [
     "누군가 주인공에게 말을 걸면 대답 선택지가 2~3개 뜹니다. 고른 답에 따라 바로 뒤 1~3줄만 달라지고, 이후에는 같은 이야기로 이어집니다.",
     "스토리 진행, 보상, 호감도 같은 결과는 바뀌지 않습니다. 고른 답은 다음 장면을 쓸 때 AI에게 전달되지 않습니다.",
-    "선택지는 마우스, 휠, ↑ / ↓ 화살표로 고르고 F(또는 Enter)로 정합니다.",
+    "선택지는 마우스, 휠, ↑ / ↓ 화살표로 고르고 선택 키(기본 F) 또는 Enter로 정합니다.",
     "선택지 버튼은 외형 · 화면의 UI 스타일을 따라 모양과 색이 바뀝니다.",
     "자동 모드는 선택지에서 멈추고, 건너뛰기를 누르면 선택지도 함께 건너뜁니다. 다시 읽으면 선택지가 다시 뜹니다.",
   ];
@@ -67,6 +67,43 @@
     paint();
   }
 
+  /* ═════════════ The pick key ═════════════
+   * Kept per browser in localStorage, where the game's choice menu (gacha-choice-runtime.cjs) reads it each time
+   * it opens. Stored by key position (KeyboardEvent.code), so a key keeps working in the Korean input mode. */
+  const KEY_CODE = "gch-key-code", KEY_LABEL = "gch-key-label", DEFAULT_KEY = { code: "KeyF", label: "F" };
+  // Arrows move the highlight and Enter always picks; Escape cancels changing the key; the rest are not keys to press alone.
+  const NOT_PICK_KEYS = new Set(["ArrowUp", "ArrowDown", "Enter", "NumpadEnter", "Escape", "Tab", "ShiftLeft", "ShiftRight", "ControlLeft", "ControlRight", "AltLeft", "AltRight", "MetaLeft", "MetaRight", "CapsLock", "Lang1", "Lang2", "Backspace"]);
+  let keyState = { capturing: false, note: "" };
+  function readKey() {
+    try { return { code: localStorage.getItem(KEY_CODE) || DEFAULT_KEY.code, label: localStorage.getItem(KEY_LABEL) || DEFAULT_KEY.label }; }
+    catch { return { ...DEFAULT_KEY }; }
+  }
+  function writeKey(k) {
+    try {
+      if (!k || k.code === DEFAULT_KEY.code) { localStorage.removeItem(KEY_CODE); localStorage.removeItem(KEY_LABEL); }
+      else { localStorage.setItem(KEY_CODE, k.code); localStorage.setItem(KEY_LABEL, k.label); }
+      return true;
+    } catch { return false; }
+  }
+  function keyLabel(e) {
+    const c = e.code;
+    if (/^Key[A-Z]$/.test(c)) return c.slice(3);
+    if (/^Digit\d$/.test(c)) return c.slice(5);
+    if (/^Numpad\d$/.test(c)) return "Num " + c.slice(6);
+    if (c === "Space") return "Space";
+    // Other printable keys show the character they type; anything else shows its code name.
+    return e.key && e.key.length === 1 && /[!-~]/.test(e.key) ? e.key.toUpperCase() : c;
+  }
+  on(document, "keydown", (e) => {
+    if (!keyState.capturing) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    if (e.code === "Escape") keyState = { capturing: false, note: "" };
+    else if (!e.code || NOT_PICK_KEYS.has(e.code) || e.ctrlKey || e.metaKey || e.altKey) keyState = { capturing: true, note: "그 키는 쓸 수 없습니다. 다른 키를 눌러 주세요." };
+    else keyState = { capturing: false, note: writeKey({ code: e.code, label: keyLabel(e) }) ? "" : "이 브라우저에 저장하지 못했습니다." };
+    paint();
+  }, { capture: true });
+
   /* ═════════════ The page ═════════════ */
   const el = (tag, cls, text) => {
     const n = document.createElement(tag);
@@ -102,9 +139,30 @@
     const note = hint("");
     note.setAttribute("data-gch-note", "");
     freq.append(chips, note);
+    const key = plate("선택 키");
+    const keyRow = el("div", "st-chips");
+    keyRow.setAttribute("role", "group");
+    keyRow.setAttribute("aria-label", "선택 키");
+    const cur = el("button", "st-chip");
+    cur.type = "button";
+    cur.disabled = true;
+    cur.setAttribute("aria-pressed", "true");
+    cur.setAttribute("data-gch-key-cur", "");
+    const change = el("button", "st-chip", "바꾸기");
+    change.type = "button";
+    change.setAttribute("data-gch-key-change", "");
+    on(change, "click", (e) => { e.stopPropagation(); keyState = { capturing: !keyState.capturing, note: "" }; paint(); });
+    const reset = el("button", "st-chip", "기본값 (F)");
+    reset.type = "button";
+    reset.setAttribute("data-gch-key-reset", "");
+    on(reset, "click", (e) => { e.stopPropagation(); keyState = { capturing: false, note: writeKey(null) ? "" : "이 브라우저에 저장하지 못했습니다." }; paint(); });
+    keyRow.append(cur, change, reset);
+    const keyNote = hint("");
+    keyNote.setAttribute("data-gch-key-note", "");
+    key.append(keyRow, keyNote);
     const about = plate("안내");
     for (const line of ABOUT) about.append(hint(line));
-    const page = [freq, about];
+    const page = [freq, key, about];
     for (const p of page) p.setAttribute("data-gch-page", "");
     return page;
   }
@@ -119,6 +177,16 @@
       : state.status === "error" ? "설정을 불러오지 못했습니다. 화면을 다시 열어 주세요."
       : desc + " 다음에 생성하는 장면부터 적용됩니다.";
     for (const p of root.querySelectorAll("[data-gch-note]")) p.textContent = state.note ? state.note + " " + text : text;
+    const k = readKey();
+    for (const b of root.querySelectorAll("[data-gch-key-cur]")) b.textContent = keyState.capturing ? "…" : k.label;
+    for (const b of root.querySelectorAll("[data-gch-key-change]")) {
+      b.textContent = keyState.capturing ? "취소" : "바꾸기";
+      b.setAttribute("aria-pressed", String(keyState.capturing));
+    }
+    for (const b of root.querySelectorAll("[data-gch-key-reset]")) b.disabled = k.code === DEFAULT_KEY.code;
+    const keyText = keyState.capturing ? "새로 쓸 키를 누르세요. Esc를 누르면 취소합니다."
+      : "선택지가 떠 있을 때 이 키를 누르면 강조된 선택지가 골라집니다. ↑ / ↓와 휠로 옮기고, Enter도 항상 동작합니다. 이 기기(브라우저)에만 저장됩니다.";
+    for (const p of root.querySelectorAll("[data-gch-key-note]")) p.textContent = keyState.note ? keyState.note + " " + keyText : keyText;
   }
   function gameRoot() { return document.querySelector(HOST_TAG)?.shadowRoot || null; }
   function paint() { const r = gameRoot(); if (r) paintPage(r); }
@@ -155,6 +223,7 @@
     titleSwap = null;
     for (const p of page || []) p.remove();
     page = null;
+    keyState = { capturing: false, note: "" };
     for (const t of gameRoot()?.querySelectorAll("[data-gch-tab]") || []) select(t, false);
   }
   function showPage(screen, rail, pane, tab) {
