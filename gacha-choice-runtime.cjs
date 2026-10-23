@@ -32,22 +32,22 @@ const CHOICE_RULES = [
   '- Options change tone and flavour only, never a fact, decision, event, relationship or outcome. Never put the choice on the last segment.',
 ];
 const S_PROMPT_OLD = JSON.stringify(NO_CHOICE) + ',';
-const S_PROMPT_NEW = '...__gfcPrompt(),';
+const S_PROMPT_NEW = '...__gchPrompt(),';
 // Helpers go next to the beat parser, a top-level function, so the routes inside lT() can reach them too.
 // The frequency is kept in <data>/gacha-choice-settings.json; the snapshot runs from <data>/capability-runtime-snapshots/<id>/.
 const S_FN_OLD = 'function AS(e,t={}){';
-const S_FN_NEW = 'function __gfcNorm(c){if(!c||typeof c!="object"||!Array.isArray(c.options))return null;let o=[];for(let x of c.options){if(!x||typeof x!="object")continue;let lb=String(x.label??"").trim().slice(0,120);if(!lb)continue;let ls=[];for(let y of Array.isArray(x.lines)?x.lines:[]){if(!y||typeof y!="object")continue;let t=String(y.text??"").trim();if(!t)continue;let z={speaker:String(y.speaker??"").trim().slice(0,80),text:t.slice(0,600)};(y.thought===!0||y.thought==="true")&&(z.thought=!0);ls.push(z);if(ls.length>=3)break}if(ls.length)o.push({label:lb,lines:ls});if(o.length>=3)break}return o.length>=2?{options:o}:null}' +
-  'function __gfcFile(){try{return{fs:process.getBuiltinModule("node:fs"),url:new URL("../../gacha-choice-settings.json",import.meta.url)}}catch{return null}}' +
-  'function __gfcFreq(){let g=globalThis;if(g.__gfcFreqV===void 0){g.__gfcFreqV="often";let f=__gfcFile();try{let j=f&&JSON.parse(f.fs.readFileSync(f.url,"utf8"));j&&["often","sometimes","off"].includes(j.frequency)&&(g.__gfcFreqV=j.frequency)}catch{}}return g.__gfcFreqV}' +
-  'function __gfcSave(v){globalThis.__gfcFreqV=v;let f=__gfcFile();try{f.fs.writeFileSync(f.url,JSON.stringify({frequency:v})+"\\n");return!0}catch{return!1}}' +
-  'function __gfcPrompt(){let f=__gfcFreq(),h=' + JSON.stringify(HOW_OFTEN) + ';return f==="off"?[' + JSON.stringify(NO_CHOICE) + ']:' + JSON.stringify(CHOICE_RULES) + '.map(x=>x==="@HOW_OFTEN"?h[f]||h.often:x)}' +
+const S_FN_NEW = 'function __gchNorm(c){if(!c||typeof c!="object"||!Array.isArray(c.options))return null;let o=[];for(let x of c.options){if(!x||typeof x!="object")continue;let lb=String(x.label??"").trim().slice(0,120);if(!lb)continue;let ls=[];for(let y of Array.isArray(x.lines)?x.lines:[]){if(!y||typeof y!="object")continue;let t=String(y.text??"").trim();if(!t)continue;let z={speaker:String(y.speaker??"").trim().slice(0,80),text:t.slice(0,600)};(y.thought===!0||y.thought==="true")&&(z.thought=!0);ls.push(z);if(ls.length>=3)break}if(ls.length)o.push({label:lb,lines:ls});if(o.length>=3)break}return o.length>=2?{options:o}:null}' +
+  'function __gchFile(){try{return{fs:process.getBuiltinModule("node:fs"),url:new URL("../../gacha-choice-settings.json",import.meta.url)}}catch{return null}}' +
+  'function __gchFreq(){let g=globalThis;if(g.__gchFreqV===void 0){g.__gchFreqV="often";let f=__gchFile();try{let j=f&&JSON.parse(f.fs.readFileSync(f.url,"utf8"));j&&["often","sometimes","off"].includes(j.frequency)&&(g.__gchFreqV=j.frequency)}catch{}}return g.__gchFreqV}' +
+  'function __gchSave(v){globalThis.__gchFreqV=v;let f=__gchFile();try{f.fs.writeFileSync(f.url,JSON.stringify({frequency:v})+"\\n");return!0}catch{return!1}}' +
+  'function __gchPrompt(){let f=__gchFreq(),h=' + JSON.stringify(HOW_OFTEN) + ';return f==="off"?[' + JSON.stringify(NO_CHOICE) + ']:' + JSON.stringify(CHOICE_RULES) + '.map(x=>x==="@HOW_OFTEN"?h[f]||h.often:x)}' +
   S_FN_OLD;
 const S_ROUTE_OLD = 's.get("/ping",async()=>({ok:!0,id:n.id,version:n.version})),';
-const S_ROUTE_NEW = 's.get("/choice-settings",async()=>({ok:!0,frequency:__gfcFreq()})),' +
-  's.post("/choice-settings",async p=>{let v=String((p&&p.body||{}).frequency||"");if(!["often","sometimes","off"].includes(v))return{ok:!1,error:"bad-request"};return{ok:!0,frequency:v,saved:__gfcSave(v)}}),' +
+const S_ROUTE_NEW = 's.get("/choice-settings",async()=>({ok:!0,frequency:__gchFreq()})),' +
+  's.post("/choice-settings",async p=>{let v=String((p&&p.body||{}).frequency||"");if(!["often","sometimes","off"].includes(v))return{ok:!1,error:"bad-request"};return{ok:!0,frequency:v,saved:__gchSave(v)}}),' +
   S_ROUTE_OLD;
 const S_SEG_OLD = 'let ie={speaker:l(G.speaker),text:W};(G.thought===!0||G.thought==="true")&&(ie.thought=!0);';
-const S_SEG_NEW = S_SEG_OLD + '{let __c=__gfcNorm(G.choice);__c&&(ie.choice=__c)}';
+const S_SEG_NEW = S_SEG_OLD + '{let __c=__gchNorm(G.choice);__c&&(ie.choice=__c)}';
 const S_END_OLD = 'if(!I.length)return null;let D={segments:I,';
 const S_END_NEW = 'if(!I.length)return null;{let __n=0;for(let __i=0;__i<I.length;__i++){if(!I[__i].choice)continue;if(__i===I.length-1||__n>=1)delete I[__i].choice;else __n++}}let D={segments:I,';
 const SERVER_EDITS = [[S_PROMPT_OLD, S_PROMPT_NEW], [S_FN_OLD, S_FN_NEW], [S_SEG_OLD, S_SEG_NEW], [S_END_OLD, S_END_NEW], [S_ROUTE_OLD, S_ROUTE_NEW]];
@@ -57,42 +57,43 @@ const SERVER_EDITS = [[S_PROMPT_OLD, S_PROMPT_NEW], [S_FN_OLD, S_FN_NEW], [S_SEG
 // Colours come from the game's UI style tokens on .gf-arena[data-style] (Settings → 화면 → UI 스타일);
 // the base rule is Vanguard, the game's default, and each other style only changes what differs.
 const A = (s) => '.gf-arena[data-style="' + s + '"] ';
-const C_CSS = '.gfc-menu{display:flex;flex-direction:column;align-items:flex-end;gap:.4em;margin:0 0 .55em;pointer-events:auto}' +
-  '.gfc-opt{all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;gap:.6em;min-width:min(20em,100%);max-width:100%;padding:.5em 1.1em;' +
+const C_CSS = '.gch-menu{display:flex;flex-direction:column;align-items:flex-end;gap:.4em;margin:0 0 .55em;pointer-events:auto}' +
+  '.gch-opt{all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;gap:.6em;min-width:min(20em,100%);max-width:100%;padding:.5em 1.1em;' +
   'background:color-mix(in srgb,var(--ink-2,#151D2C) 88%,transparent);color:var(--text,#EDF1F6);border:1px solid color-mix(in srgb,var(--coral,#F2603C) 60%,transparent);' +
   'border-radius:2px;clip-path:polygon(.6em 0,100% 0,100% calc(100% - .6em),calc(100% - .6em) 100%,0 100%,0 .6em);' +
   'font-family:inherit;font-size:1em;line-height:1.35;text-align:left;box-shadow:0 .25em .9em rgba(0,0,0,.35);' +
-  'opacity:0;transform:translateX(12px);animation:gfc-in .22s ease-out forwards;transition:background .12s,color .12s}' +
-  '.gfc-opt:nth-child(3){animation-delay:.05s}.gfc-opt:nth-child(4){animation-delay:.1s}' +
-  '.gfc-opt::before{content:"";flex:none;width:.5em;height:.5em;transform:rotate(45deg);background:var(--coral,#F2603C)}' +
-  '.gfc-opt:hover,.gfc-opt:focus-visible{background:var(--coral,#F2603C);color:var(--on-coral,#fff)}.gfc-opt:hover::before,.gfc-opt:focus-visible::before{background:currentColor}' +
-  A('aurora') + '.gfc-opt{clip-path:none;border-radius:999px;background:color-mix(in srgb,var(--ink-2,#171334) 62%,rgba(255,255,255,.10));-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}' +
-  A('bloom') + '.gfc-opt{clip-path:none;border-radius:999px;background:var(--surface,#fff);color:var(--on-surface,#16233A);border-color:transparent;box-shadow:0 .2em .7em rgba(22,35,58,.25)}' +
-  A('signal') + '.gfc-opt{clip-path:none;border-radius:0;border-width:0 0 0 3px;border-color:var(--coral,#C8FF3D);background:color-mix(in srgb,var(--ink-2,#0C0D10) 90%,transparent);box-shadow:none}' +
-  A('signal') + '.gfc-opt::before{border-radius:0;transform:none;width:.35em}' +
-  A('ember') + '.gfc-opt{clip-path:none;border-radius:.5em;background:color-mix(in srgb,var(--surface,#53381F) 94%,transparent);color:var(--on-surface,#F0D9A8)}' +
-  '@keyframes gfc-in{to{opacity:1;transform:none}}@media(prefers-reduced-motion:reduce){.gfc-opt{animation:none;opacity:1;transform:none}}';
+  'opacity:0;transform:translateX(12px);animation:gch-in .22s ease-out forwards;transition:background .12s,color .12s}' +
+  '.gch-opt:nth-child(3){animation-delay:.05s}.gch-opt:nth-child(4){animation-delay:.1s}' +
+  '.gch-opt::before{content:"";flex:none;width:.5em;height:.5em;transform:rotate(45deg);background:var(--coral,#F2603C)}' +
+  '.gch-opt:hover,.gch-opt:focus-visible{background:var(--coral,#F2603C);color:var(--on-coral,#fff)}.gch-opt:hover::before,.gch-opt:focus-visible::before{background:currentColor}' +
+  A('aurora') + '.gch-opt{clip-path:none;border-radius:999px;background:color-mix(in srgb,var(--ink-2,#171334) 62%,rgba(255,255,255,.10));-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}' +
+  A('bloom') + '.gch-opt{clip-path:none;border-radius:999px;background:var(--surface,#fff);color:var(--on-surface,#16233A);border-color:transparent;box-shadow:0 .2em .7em rgba(22,35,58,.25)}' +
+  A('signal') + '.gch-opt{clip-path:none;border-radius:0;border-width:0 0 0 3px;border-color:var(--coral,#C8FF3D);background:color-mix(in srgb,var(--ink-2,#0C0D10) 90%,transparent);box-shadow:none}' +
+  A('signal') + '.gch-opt::before{border-radius:0;transform:none;width:.35em}' +
+  A('ember') + '.gch-opt{clip-path:none;border-radius:.5em;background:color-mix(in srgb,var(--surface,#53381F) 94%,transparent);color:var(--on-surface,#F0D9A8)}' +
+  '@keyframes gch-in{to{opacity:1;transform:none}}@media(prefers-reduced-motion:reduce){.gch-opt{animation:none;opacity:1;transform:none}}';
 const C_JE_OLD = 'function je(){if(P(),I){$e(a[_]);return}_<a.length-1&&(_+=1,Ee(a[_],!0))}';
-const C_JE_NEW = 'let __gfcB=null,__gfcM=null;' +
-  'function __gfcX(){__gfcM&&(__gfcM.remove(),__gfcM=null)}' +
-  'function __gfcAsk(){let s=a[_],c=s&&s.choice,os=c&&Array.isArray(c.options)?c.options.filter(x=>x&&x.label&&Array.isArray(x.lines)&&x.lines.length):[];' +
+const C_JE_NEW = 'let __gchB=null,__gchM=null;' +
+  'function __gchX(){__gchM&&(__gchM.remove(),__gchM=null)}' +
+  'function __gchAsk(){let s=a[_],c=s&&s.choice,os=c&&Array.isArray(c.options)?c.options.filter(x=>x&&x.label&&Array.isArray(x.lines)&&x.lines.length):[];' +
   'if(os.length<2||_>=a.length-1||!n||!n.parentNode)return!1;' +
-  'let m=document.createElement("div");m.className="gfc-menu";try{l&&(m.style.fontSize=getComputedStyle(l).fontSize)}catch{}m.setAttribute("role","group");m.setAttribute("aria-label","Reply");' +
-  'let st=document.createElement("style");st.textContent=' + JSON.stringify(C_CSS) + ';m.append(st);' +
-  'for(let x of os){let b=document.createElement("button");b.type="button";b.className="gfc-opt";b.textContent=String(x.label);' +
-  'b.addEventListener("click",ev=>{ev.stopPropagation();__gfcX();__gfcB={l:x.lines.map(y=>{let z={...s,speaker:String(y.speaker||""),text:String(y.text||"")};delete z.choice;y.thought?z.thought=!0:delete z.thought;return z}),k:0};Ee(__gfcB.l[0],!0)});m.append(b)}' +
+  'let m=document.createElement("div");m.className="gch-menu";try{l&&(m.style.fontSize=getComputedStyle(l).fontSize)}catch{}m.setAttribute("role","group");m.setAttribute("aria-label","Reply");' +
+  // One stylesheet per player, in .root beside (not inside) .vn, so readers of the VN text never see CSS.
+  'let st=o&&o.querySelector("style[data-gch]");if(o&&!st){st=document.createElement("style");st.setAttribute("data-gch","");st.textContent=' + JSON.stringify(C_CSS) + ';o.prepend(st)}' +
+  'for(let x of os){let b=document.createElement("button");b.type="button";b.className="gch-opt";b.textContent=String(x.label);' +
+  'b.addEventListener("click",ev=>{ev.stopPropagation();__gchX();__gchB={l:x.lines.map(y=>{let z={...s,speaker:String(y.speaker||""),text:String(y.text||"")};delete z.choice;y.thought?z.thought=!0:delete z.thought;return z}),k:0};Ee(__gchB.l[0],!0)});m.append(b)}' +
   'm.addEventListener("click",ev=>ev.stopPropagation());' +
-  'let dk=n.parentNode,bar=dk.querySelector(".vn-bar");dk.insertBefore(m,bar&&bar.parentNode===dk?bar:n);__gfcM=m;h&&(h.hidden=!0);' +
-  'let f1=m.querySelector(".gfc-opt");f1&&f1.focus&&f1.focus({preventScroll:!0});return!0}' +
-  'function je(){if(P(),I){$e(__gfcB?__gfcB.l[__gfcB.k]:a[_]);return}if(__gfcM)return;' +
-  'if(__gfcB){__gfcB.k+=1;if(__gfcB.k<__gfcB.l.length){Ee(__gfcB.l[__gfcB.k],!0);return}__gfcB=null}else if(__gfcAsk())return;' +
+  'let dk=n.parentNode,bar=dk.querySelector(".vn-bar");dk.insertBefore(m,bar&&bar.parentNode===dk?bar:n);__gchM=m;h&&(h.hidden=!0);' +
+  'let f1=m.querySelector(".gch-opt");f1&&f1.focus&&f1.focus({preventScroll:!0});return!0}' +
+  'function je(){if(P(),I){$e(__gchB?__gchB.l[__gchB.k]:a[_]);return}if(__gchM)return;' +
+  'if(__gchB){__gchB.k+=1;if(__gchB.k<__gchB.l.length){Ee(__gchB.l[__gchB.k],!0);return}__gchB=null}else if(__gchAsk())return;' +
   '_<a.length-1&&(_+=1,Ee(a[_],!0))}';
 const C_EE_OLD = 'function Ee(W,ce){if(B(),P(),';
-const C_EE_NEW = 'function Ee(W,ce){if(B(),P(),__gfcX(),';
+const C_EE_NEW = 'function Ee(W,ce){if(B(),P(),__gchX(),';
 const C_SKIP_OLD = '_=a.length-1,Ee(a[_],!1)';
-const C_SKIP_NEW = '_=a.length-1,__gfcB=null,Ee(a[_],!1)';
+const C_SKIP_NEW = '_=a.length-1,__gchB=null,Ee(a[_],!1)';
 const CLIENT_EDITS = [[C_JE_OLD, C_JE_NEW], [C_EE_OLD, C_EE_NEW], [C_SKIP_OLD, C_SKIP_NEW]];
-const CLIENT_DONE = 'let __gfcB=null,__gfcM=null;';
+const CLIENT_DONE = 'let __gchB=null,__gchM=null;';
 
 // Returns the edited text, or null when any anchor is missing or repeated.
 function applyEdits(source, edits) {
@@ -107,15 +108,15 @@ function transformClient(source) { return source.includes(CLIENT_DONE) ? source 
 function transformRoute(source) {
   if (count(source, ROUTE_MARKER) !== 1) return null;
   const injected = [
-    'if (id === "gacha-forge" && entrypoint && Buffer.isBuffer(entrypoint.data) && globalThis.__gfcTransformClient) {',
+    'if (id === "gacha-forge" && entrypoint && Buffer.isBuffer(entrypoint.data) && globalThis.__gchTransformClient) {',
     'const __before = entrypoint.data.toString("utf8");',
-    'const __after = globalThis.__gfcTransformClient(__before);',
+    'const __after = globalThis.__gchTransformClient(__before);',
     'if (__after == null) process.stderr.write("[gacha-choice] client signature mismatch; skipped\\n");',
-    'else if (__after !== __before) { entrypoint.data = Buffer.from(__after, "utf8"); entrypoint.sha256 = __gfcHash(entrypoint.data); }',
+    'else if (__after !== __before) { entrypoint.data = Buffer.from(__after, "utf8"); entrypoint.sha256 = __gchHash(entrypoint.data); }',
     '}',
   ].join('\n');
-  return 'import { createHash as __gfcCreateHash } from "node:crypto";\n' +
-    'const __gfcHash = b => __gfcCreateHash("sha256").update(b).digest("hex");\n' +
+  return 'import { createHash as __gchCreateHash } from "node:crypto";\n' +
+    'const __gchHash = b => __gchCreateHash("sha256").update(b).digest("hex");\n' +
     source.replace(ROUTE_MARKER, () => ROUTE_MARKER + '\n' + injected);
 }
 
@@ -127,7 +128,7 @@ if (process.env.GF_CHOICE_TEST !== '1') {
   if (Number(process.versions.node.split('.')[0]) < 22) {
     process.stderr.write(TAG + ' Node 22+ required; inactive\n');
   } else {
-    globalThis.__gfcTransformClient = transformClient;
+    globalThis.__gchTransformClient = transformClient;
     registerHooks({ load(url, context, nextLoad) {
       if (!url.startsWith('file:')) return nextLoad(url, context);
       let file;
