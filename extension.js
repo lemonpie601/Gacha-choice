@@ -1,7 +1,8 @@
-/* Gacha Choice v1.3.0 — personal extension for Gacha Forge 1.8.13 on Marinara Engine.
+/* Gacha Choice v2.0.0 — personal extension for Gacha Forge 1.8.13 on Marinara Engine.
  * Adds "대답 선택지" to the game's Settings rail, with its own page drawn from the game's classes
  * (st-sect / st-plate / st-chips / st-chip) so it follows the chosen UI style. The page reads and sets how often
- * new story beats get a reply choice; the choices themselves are made and shown by gacha-choice-runtime.cjs.
+ * new story beats get reply choices, how many per beat and how many answers each, plus the pick key; the choices
+ * themselves are made, shown and saved by gacha-choice-runtime.cjs.
  * Works next to Gacha Forge · Customizer, which adds its own tab the same way: each closes its page when
  * any other tab is clicked. */
 (() => {
@@ -14,23 +15,29 @@
   const HOST_TAG = "marinara-capability-gacha-forge";
   const API = "/api/gacha-forge/choice-settings";
   const TITLE = "대답 선택지";
+  // [value, chip label, description] for each setting the server patch keeps (see gacha-choice-runtime.cjs).
   const FREQS = [
-    ["often", "자주", "누군가 주인공에게 말을 걸면 대답 선택지를 넣습니다."],
-    ["sometimes", "가끔", "꼭 대답할 만한 순간에만 가끔 넣습니다. 대략 장면 세 개 중 하나입니다."],
     ["off", "끄기", "새 장면에는 선택지를 만들지 않습니다. 이미 만든 장면의 선택지는 그대로 나옵니다."],
+    ["rare", "드물게", "꼭 대답해야 할 순간에만 넣습니다. 대략 장면 다섯 개 중 하나입니다."],
+    ["sometimes", "가끔", "대답할 만한 순간에 가끔 넣습니다. 대략 장면 세 개 중 하나입니다."],
+    ["often", "자주", "누군가 주인공에게 말을 걸면 대답 선택지를 넣습니다."],
+    ["always", "매 장면", "모든 장면에 넣습니다. 말을 거는 장면이 없으면 자연스럽게 만들어 넣습니다."],
   ];
+  const PER_BEAT = [[1, "1개"], [2, "2개"], [3, "3개"]];
+  const ANSWERS = [["auto", "자동 (2~3)"], [2, "2개"], [3, "3개"], [4, "4개"]];
   const ABOUT = [
-    "누군가 주인공에게 말을 걸면 대답 선택지가 2~3개 뜹니다. 고른 답에 따라 바로 뒤 1~3줄만 달라지고, 이후에는 같은 이야기로 이어집니다.",
-    "스토리 진행, 보상, 호감도 같은 결과는 바뀌지 않습니다. 고른 답은 다음 장면을 쓸 때 AI에게 전달되지 않습니다.",
-    "선택지는 마우스, 휠, ↑ / ↓ 화살표로 고르고 선택 키(기본 F) 또는 Enter로 정합니다.",
+    "누군가 주인공에게 말을 걸면 대답 선택지가 뜹니다. 고른 답에 따라 바로 뒤 1~3줄이 달라지고, 그 장면은 같은 흐름으로 이어집니다.",
+    "고른 답은 장면에 저장됩니다. 다시 읽으면 고른 답이 그대로 나오고, 기록(백로그)에도 남으며, 다음 장면을 쓸 때 AI가 주인공이 한 말을 이어받습니다.",
+    "선택지는 마우스나 ↑ / ↓ 화살표로 고르고 선택 키(기본 F) 또는 Enter로 정합니다.",
     "선택지 버튼은 외형 · 화면의 UI 스타일을 따라 모양과 색이 바뀝니다.",
-    "자동 모드는 선택지에서 멈추고, 건너뛰기를 누르면 선택지도 함께 건너뜁니다. 다시 읽으면 선택지가 다시 뜹니다.",
+    "자동 모드는 선택지에서 멈추고, 건너뛰기를 누르면 선택지도 함께 건너뜁니다. 건너뛴 선택지는 저장되지 않습니다.",
   ];
   const life = new AbortController();
   const on = (target, type, fn, opts = {}) => target.addEventListener(type, fn, { ...opts, signal: life.signal });
   let disposed = false;
   // status: loading | ok | missing (no server patch) | error
-  let state = { status: "loading", frequency: "", note: "" };
+  let state = { status: "loading", frequency: "", perBeat: 0, answers: "", note: "" };
+  const pick = (d) => ({ frequency: d.frequency, perBeat: d.perBeat, answers: d.answers });
 
   async function call(method, body) {
     const res = await fetch(API, {
@@ -47,22 +54,23 @@
   async function load() {
     try {
       const data = await call("GET");
-      state = { status: "ok", frequency: data.frequency, note: "" };
+      state = { status: "ok", ...pick(data), note: "" };
     } catch (e) {
-      state = { status: e.code === "missing" ? "missing" : "error", frequency: "", note: "" };
+      state = { status: e.code === "missing" ? "missing" : "error", frequency: "", perBeat: 0, answers: "", note: "" };
     }
     paint();
   }
-  async function choose(frequency) {
-    if (state.status !== "ok" || frequency === state.frequency) return;
-    const before = state.frequency;
-    state = { ...state, frequency, note: "" };
+  // Changes one setting: shown at once, then confirmed (or rolled back) by the server.
+  async function choose(field, value) {
+    if (state.status !== "ok" || value === state[field]) return;
+    const before = pick(state);
+    state = { ...state, [field]: value, note: "" };
     paint();
     try {
-      const data = await call("POST", { frequency });
-      state = { status: "ok", frequency: data.frequency, note: data.saved ? "" : "저장 파일에 쓰지 못했습니다. 엔진을 다시 시작하면 '자주'로 돌아갑니다." };
+      const data = await call("POST", { [field]: value });
+      state = { status: "ok", ...pick(data), note: data.saved ? "" : "저장 파일에 쓰지 못했습니다. 엔진을 다시 시작하면 기본값으로 돌아갑니다." };
     } catch {
-      state = { ...state, frequency: before, note: "바꾸지 못했습니다. 잠시 후 다시 시도해 주세요." };
+      state = { ...state, ...before, note: "바꾸지 못했습니다. 잠시 후 다시 시도해 주세요." };
     }
     paint();
   }
@@ -123,22 +131,30 @@
     p.style.cssText = "display:block;margin:.7em 0 0";
     return p;
   }
+  // A row of the game's chips for one setting; paintPage marks the current value.
+  function chipRow(field, choices, label) {
+    const row = el("div", "st-chips");
+    row.setAttribute("role", "group");
+    row.setAttribute("aria-label", label);
+    for (const [value, text] of choices) {
+      const b = el("button", "st-chip", text);
+      b.type = "button";
+      b.setAttribute("data-gch-field", field);
+      b.setAttribute("data-gch-value", String(value));
+      on(b, "click", (e) => { e.stopPropagation(); choose(field, value); });
+      row.append(b);
+    }
+    return row;
+  }
   // The page is a few plates placed straight into the game's .st-pane, so the pane's own spacing applies.
   function makePage() {
     const freq = plate("선택지 빈도");
-    const chips = el("div", "st-chips");
-    chips.setAttribute("role", "group");
-    chips.setAttribute("aria-label", "대답 선택지 빈도");
-    for (const [id, label] of FREQS) {
-      const b = el("button", "st-chip", label);
-      b.type = "button";
-      b.setAttribute("data-gch-freq", id);
-      on(b, "click", (e) => { e.stopPropagation(); choose(id); });
-      chips.append(b);
-    }
     const note = hint("");
     note.setAttribute("data-gch-note", "");
-    freq.append(chips, note);
+    freq.append(chipRow("frequency", FREQS, "대답 선택지 빈도"), note);
+    const amount = plate("선택지 수");
+    amount.append(hint("한 장면에 나올 수 있는 선택지 수 (최대)"), chipRow("perBeat", PER_BEAT, "한 장면 최대 선택지 수"),
+      hint("선택지 하나에 나오는 답 개수"), chipRow("answers", ANSWERS, "답 개수"));
     const key = plate("선택 키");
     const keyRow = el("div", "st-chips");
     keyRow.setAttribute("role", "group");
@@ -162,14 +178,14 @@
     key.append(keyRow, keyNote);
     const about = plate("안내");
     for (const line of ABOUT) about.append(hint(line));
-    const page = [freq, key, about];
+    const page = [freq, amount, key, about];
     for (const p of page) p.setAttribute("data-gch-page", "");
     return page;
   }
   function paintPage(root) {
-    for (const b of root.querySelectorAll("[data-gch-freq]")) {
-      b.setAttribute("aria-pressed", String(b.getAttribute("data-gch-freq") === state.frequency));
-      b.disabled = state.status !== "ok";
+    for (const b of root.querySelectorAll("[data-gch-field]")) {
+      b.setAttribute("aria-pressed", String(b.getAttribute("data-gch-value") === String(state[b.getAttribute("data-gch-field")])));
+      b.disabled = state.status !== "ok" || (b.getAttribute("data-gch-field") !== "frequency" && state.frequency === "off");
     }
     const desc = (FREQS.find(([id]) => id === state.frequency) || [])[2];
     const text = state.status === "loading" ? "설정을 불러오는 중입니다."
@@ -185,7 +201,7 @@
     }
     for (const b of root.querySelectorAll("[data-gch-key-reset]")) b.disabled = k.code === DEFAULT_KEY.code;
     const keyText = keyState.capturing ? "새로 쓸 키를 누르세요. Esc를 누르면 취소합니다."
-      : "선택지가 떠 있을 때 이 키를 누르면 강조된 선택지가 골라집니다. ↑ / ↓와 휠로 옮기고, Enter도 항상 동작합니다. 이 기기(브라우저)에만 저장됩니다.";
+      : "선택지가 떠 있을 때 이 키를 누르면 강조된 선택지가 골라집니다. 마우스나 ↑ / ↓로 옮기고, Enter도 항상 동작합니다. 이 기기(브라우저)에만 저장됩니다.";
     for (const p of root.querySelectorAll("[data-gch-key-note]")) p.textContent = keyState.note ? keyState.note + " " + keyText : keyText;
   }
   function gameRoot() { return document.querySelector(HOST_TAG)?.shadowRoot || null; }
