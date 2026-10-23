@@ -25,6 +25,7 @@ const client = P.transformClient(clientSrc);
 assert.ok(client && client !== clientSrc, 'client.js anchors not found');
 syntax('client.mjs', client);
 assert.equal(P.transformClient(client), client, 'client patch must apply once only');
+assert.ok(client.includes('ev.code==="KeyF"') && client.includes('addEventListener("wheel"'), 'F key and wheel picking are in the client patch');
 const route = P.transformRoute(fs.readFileSync(path.join(root, 'packages', 'server', 'dist', 'routes', 'capability-packages.routes.js'), 'utf8'));
 assert.ok(route, 'route anchor not found');
 syntax('route.mjs', route);

@@ -65,7 +65,10 @@ const C_CSS = '.gch-menu{display:flex;flex-direction:column;align-items:flex-end
   'opacity:0;transform:translateX(12px);animation:gch-in .22s ease-out forwards;transition:background .12s,color .12s}' +
   '.gch-opt:nth-child(3){animation-delay:.05s}.gch-opt:nth-child(4){animation-delay:.1s}' +
   '.gch-opt::before{content:"";flex:none;width:.5em;height:.5em;transform:rotate(45deg);background:var(--coral,#F2603C)}' +
-  '.gch-opt:hover,.gch-opt:focus-visible{background:var(--coral,#F2603C);color:var(--on-coral,#fff)}.gch-opt:hover::before,.gch-opt:focus-visible::before{background:currentColor}' +
+  // One highlighted option at a time ([data-on]); mouse, arrows and wheel all move it, F / Enter pick it.
+  // The second selector outranks the per-style rules below, so every style shows the highlight.
+  '.gch-opt[data-on],.gf-arena[data-style] .gch-opt[data-on]{background:var(--coral,#F2603C);color:var(--on-coral,#fff)}.gch-opt[data-on]::before{background:currentColor}.gch-opt:focus{outline:none}' +
+  '@media(hover:hover) and (pointer:fine){.gch-opt[data-on]::after{content:"F";margin-left:auto;padding:0 .4em;border:1px solid currentColor;border-radius:.25em;font-size:.78em;line-height:1.5;opacity:.85}}' +
   A('aurora') + '.gch-opt{clip-path:none;border-radius:999px;background:color-mix(in srgb,var(--ink-2,#171334) 62%,rgba(255,255,255,.10));-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}' +
   A('bloom') + '.gch-opt{clip-path:none;border-radius:999px;background:var(--surface,#fff);color:var(--on-surface,#16233A);border-color:transparent;box-shadow:0 .2em .7em rgba(22,35,58,.25)}' +
   A('signal') + '.gch-opt{clip-path:none;border-radius:0;border-width:0 0 0 3px;border-color:var(--coral,#C8FF3D);background:color-mix(in srgb,var(--ink-2,#0C0D10) 90%,transparent);box-shadow:none}' +
@@ -73,8 +76,8 @@ const C_CSS = '.gch-menu{display:flex;flex-direction:column;align-items:flex-end
   A('ember') + '.gch-opt{clip-path:none;border-radius:.5em;background:color-mix(in srgb,var(--surface,#53381F) 94%,transparent);color:var(--on-surface,#F0D9A8)}' +
   '@keyframes gch-in{to{opacity:1;transform:none}}@media(prefers-reduced-motion:reduce){.gch-opt{animation:none;opacity:1;transform:none}}';
 const C_JE_OLD = 'function je(){if(P(),I){$e(a[_]);return}_<a.length-1&&(_+=1,Ee(a[_],!0))}';
-const C_JE_NEW = 'let __gchB=null,__gchM=null;' +
-  'function __gchX(){__gchM&&(__gchM.remove(),__gchM=null)}' +
+const C_JE_NEW = 'let __gchB=null,__gchM=null,__gchK=null;' +
+  'function __gchX(){__gchM&&(__gchM.remove(),__gchM=null);__gchK&&(__gchK(),__gchK=null)}' +
   'function __gchAsk(){let s=a[_],c=s&&s.choice,os=c&&Array.isArray(c.options)?c.options.filter(x=>x&&x.label&&Array.isArray(x.lines)&&x.lines.length):[];' +
   'if(os.length<2||_>=a.length-1||!n||!n.parentNode)return!1;' +
   'let m=document.createElement("div");m.className="gch-menu";try{l&&(m.style.fontSize=getComputedStyle(l).fontSize)}catch{}m.setAttribute("role","group");m.setAttribute("aria-label","Reply");' +
@@ -84,7 +87,15 @@ const C_JE_NEW = 'let __gchB=null,__gchM=null;' +
   'b.addEventListener("click",ev=>{ev.stopPropagation();__gchX();__gchB={l:x.lines.map(y=>{let z={...s,speaker:String(y.speaker||""),text:String(y.text||"")};delete z.choice;y.thought?z.thought=!0:delete z.thought;return z}),k:0};Ee(__gchB.l[0],!0)});m.append(b)}' +
   'm.addEventListener("click",ev=>ev.stopPropagation());' +
   'let dk=n.parentNode,bar=dk.querySelector(".vn-bar");dk.insertBefore(m,bar&&bar.parentNode===dk?bar:n);__gchM=m;h&&(h.hidden=!0);' +
-  'let f1=m.querySelector(".gch-opt");f1&&f1.focus&&f1.focus({preventScroll:!0});return!0}' +
+  // Keys and wheel only while the menu is open, and never while typing or reading the backlog (b is the log box).
+  // F is matched by key position (KeyF), so it also works with the Korean input mode on.
+  'let bs=[...m.querySelectorAll(".gch-opt")],cur=0,mark=i=>{cur=(i+bs.length)%bs.length;bs.forEach((x,j)=>j===cur?x.setAttribute("data-on",""):x.removeAttribute("data-on"));try{bs[cur].focus({preventScroll:!0})}catch{}};' +
+  'bs.forEach((x,j)=>x.addEventListener("pointerenter",()=>mark(j)));mark(0);' +
+  'let off=ev=>{let t=ev.composedPath?ev.composedPath()[0]:ev.target;return!__gchM||b&&!b.hidden||t&&(t.isContentEditable||/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))},' +
+  'kd=ev=>{if(ev.ctrlKey||ev.metaKey||ev.altKey||off(ev))return;if(ev.key==="ArrowDown"||ev.key==="ArrowUp")mark(cur+(ev.key==="ArrowDown"?1:-1));else if(ev.code==="KeyF"||ev.key==="Enter")bs[cur].click();else return;ev.preventDefault();ev.stopImmediatePropagation()},' +
+  'acc=0,wh=ev=>{if(off(ev))return;ev.preventDefault();acc+=ev.deltaY;if(Math.abs(acc)>=40){mark(cur+(acc>0?1:-1));acc=0}},wt=o||G;' +
+  'document.addEventListener("keydown",kd,!0);wt&&wt.addEventListener("wheel",wh,{passive:!1});' +
+  '__gchK=()=>{document.removeEventListener("keydown",kd,!0);wt&&wt.removeEventListener("wheel",wh,{passive:!1})};return!0}' +
   'function je(){if(P(),I){$e(__gchB?__gchB.l[__gchB.k]:a[_]);return}if(__gchM)return;' +
   'if(__gchB){__gchB.k+=1;if(__gchB.k<__gchB.l.length){Ee(__gchB.l[__gchB.k],!0);return}__gchB=null}else if(__gchAsk())return;' +
   '_<a.length-1&&(_+=1,Ee(a[_],!0))}';
@@ -93,7 +104,7 @@ const C_EE_NEW = 'function Ee(W,ce){if(B(),P(),__gchX(),';
 const C_SKIP_OLD = '_=a.length-1,Ee(a[_],!1)';
 const C_SKIP_NEW = '_=a.length-1,__gchB=null,Ee(a[_],!1)';
 const CLIENT_EDITS = [[C_JE_OLD, C_JE_NEW], [C_EE_OLD, C_EE_NEW], [C_SKIP_OLD, C_SKIP_NEW]];
-const CLIENT_DONE = 'let __gchB=null,__gchM=null;';
+const CLIENT_DONE = 'let __gchB=null,__gchM=null,__gchK=null;';
 
 // Returns the edited text, or null when any anchor is missing or repeated.
 function applyEdits(source, edits) {

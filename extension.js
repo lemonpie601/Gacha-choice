@@ -1,4 +1,4 @@
-/* Gacha Choice v1.1.0 — personal extension for Gacha Forge 1.8.13 on Marinara Engine.
+/* Gacha Choice v1.2.0 — personal extension for Gacha Forge 1.8.13 on Marinara Engine.
  * Adds "대답 선택지" to the game's Settings rail, with its own page drawn from the game's classes
  * (st-sect / st-plate / st-chips / st-chip) so it follows the chosen UI style. The page reads and sets how often
  * new story beats get a reply choice; the choices themselves are made and shown by gacha-choice-runtime.cjs.
@@ -22,6 +22,7 @@
   const ABOUT = [
     "누군가 주인공에게 말을 걸면 대답 선택지가 2~3개 뜹니다. 고른 답에 따라 바로 뒤 1~3줄만 달라지고, 이후에는 같은 이야기로 이어집니다.",
     "스토리 진행, 보상, 호감도 같은 결과는 바뀌지 않습니다. 고른 답은 다음 장면을 쓸 때 AI에게 전달되지 않습니다.",
+    "선택지는 마우스, 휠, ↑ / ↓ 화살표로 고르고 F(또는 Enter)로 정합니다.",
     "선택지 버튼은 외형 · 화면의 UI 스타일을 따라 모양과 색이 바뀝니다.",
     "자동 모드는 선택지에서 멈추고, 건너뛰기를 누르면 선택지도 함께 건너뜁니다. 다시 읽으면 선택지가 다시 뜹니다.",
   ];
