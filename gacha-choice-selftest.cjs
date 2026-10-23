@@ -1,6 +1,6 @@
 'use strict';
 // Checks the patch against an installed Marinara Engine without changing any file.
-// Usage: node selftest.cjs [Marinara-Engine folder]   (default: %LOCALAPPDATA%\Marinara-Engine or /app)
+// Usage: node gacha-choice-selftest.cjs [Marinara-Engine folder]   (default: %LOCALAPPDATA%\Marinara-Engine or /app)
 process.env.GF_CHOICE_TEST = '1';
 const assert = require('node:assert/strict');
 const fs = require('node:fs');

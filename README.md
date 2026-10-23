@@ -14,7 +14,7 @@
 | --- | --- | --- |
 | `gacha-choice-runtime.cjs` | 서버 런타임 패치. 선택지를 만들고, 저장하고, 화면에 그립니다. | 필수 |
 | `manifest.json` · `extension.js` | 개인 확장. 가챠 포지 설정 목록에 “대답 선택지” 항목을 추가합니다. 플로팅 버튼은 만들지 않습니다. | 선택 (없으면 항상 “자주”) |
-| `selftest.cjs` | 설치 전에 패치가 맞는지 확인하는 자가 진단 | 확인용 |
+| `gacha-choice-selftest.cjs` | 설치 전에 패치가 맞는지 확인하는 자가 진단 | 확인용 |
 
 ## 동작 방식
 
@@ -41,12 +41,14 @@
 
 ## 설치 (Windows 로컬 설치)
 
-1. `gacha-choice-runtime.cjs`와 `selftest.cjs`를 `Marinara-Engine` 폴더(보통 `%LOCALAPPDATA%\Marinara-Engine`)에 넣습니다.
+원격 서버나 Docker로 운영한다면 아래 [설치 (SSH 서버 · Docker Compose)](#설치-ssh-서버--docker-compose)를 보세요.
+
+1. `gacha-choice-runtime.cjs`와 `gacha-choice-selftest.cjs`를 `Marinara-Engine` 폴더(보통 `%LOCALAPPDATA%\Marinara-Engine`)에 넣습니다.
 2. 먼저 자가 진단을 실행합니다. 설치된 가챠 포지에 패치가 맞는지 파일을 바꾸지 않고 확인합니다.
 
    ```bat
    cd /d %LOCALAPPDATA%\Marinara-Engine
-   node selftest.cjs
+   node gacha-choice-selftest.cjs
    ```
 
    `PASS:` 세 줄이 나오면 정상입니다. 오류가 나오면 다음 단계로 진행하지 마세요.
@@ -74,9 +76,167 @@
 
    가챠 포지 **설정** 왼쪽 목록의 “서술 · 고급” 아래에 **스토리 · 대답 선택지** 항목이 생깁니다. 커스터마이저 탭과 같은 방식이라 함께 써도 서로 겹치지 않습니다. 서버 패치 없이 확장만 설치하면 “서버 패치가 적용되어 있지 않습니다”라고 표시됩니다.
 
-### Docker를 쓰는 경우
+## 설치 (SSH 서버 · Docker Compose)
 
-다른 런타임 패치와 같은 방식입니다. 파일을 `/app/gacha-choice-runtime.cjs`로 읽기 전용 마운트하고, `NODE_OPTIONS`에 `--require=/app/gacha-choice-runtime.cjs`를 추가하세요. 자가 진단은 컨테이너 안에서 `node /app/selftest.cjs /app`으로 실행할 수 있습니다.
+마리나라를 원격 서버의 Docker로 운영하는 경우입니다. 서버에 **SSH로 접속**한 뒤 진행해 주세요. 예시는 `/root/Marinara-Engine` 설치를 기준으로 합니다. 다른 경로라면 바꿔서 입력하세요.
+
+> 이 절차는 Windows 로컬 설치에서 검증한 패치 파일과 경로 구조(`/app/...`, `DATA_DIR=/app/data`)를 기준으로 작성했습니다. Docker 서버에서 직접 실행해 확인하지는 않았습니다. 각 단계의 확인 결과가 예시와 다르면 다음 단계로 진행하지 마세요.
+
+### 1. 프로젝트 폴더로 이동
+
+```bash
+cd /root/Marinara-Engine || exit 1
+```
+
+### 2. GitHub에서 패치 받기
+
+```bash
+curl -fL --retry 3 -o gacha-choice-runtime.cjs \
+  https://raw.githubusercontent.com/lemonpie601/Gacha-choice/main/gacha-choice-runtime.cjs
+curl -fL --retry 3 -o gacha-choice-selftest.cjs \
+  https://raw.githubusercontent.com/lemonpie601/Gacha-choice/main/gacha-choice-selftest.cjs
+ls -lh gacha-choice-runtime.cjs gacha-choice-selftest.cjs
+```
+
+두 파일이 모두 보이면 정상입니다. `curl: (22)`나 `404`가 나오면 진행하지 마세요.
+
+### 3. 설정 백업 후 추가
+
+아래 스크립트는 `docker-compose.override.yml`을 백업한 뒤 **필요한 두 가지만** 추가합니다.
+
+- 패치 파일 두 개를 컨테이너의 `/app`에 읽기 전용으로 연결
+- `NODE_OPTIONS` 끝에 `--require=/app/gacha-choice-runtime.cjs` 추가
+
+`override` 파일이 없으면 새로 만듭니다. 이미 다른 런타임 패치(`.cjs`)를 쓰고 있으면 그 설정 뒤에 덧붙입니다. 형식이 예상과 다르면 **아무것도 바꾸지 않고 멈춥니다**.
+
+> Marinara 이미지는 기본으로 `NODE_OPTIONS="--max-old-space-size=4096"`을 씁니다. compose에서 `NODE_OPTIONS`를 지정하면 이 기본값이 사라지므로, 새로 만들 때는 이 값을 함께 넣습니다.
+
+```bash
+cd /root/Marinara-Engine || exit 1
+
+python3 - <<'PY'
+from pathlib import Path
+from datetime import datetime
+import re, shutil
+
+config = Path("docker-compose.override.yml")
+for f in ("gacha-choice-runtime.cjs", "gacha-choice-selftest.cjs"):
+    if not Path(f).is_file():
+        raise SystemExit(f + " 파일이 없습니다. 2단계를 먼저 진행하세요.")
+mounts = ["./gacha-choice-runtime.cjs:/app/gacha-choice-runtime.cjs:ro",
+          "./gacha-choice-selftest.cjs:/app/gacha-choice-selftest.cjs:ro"]
+flag = "--require=/app/gacha-choice-runtime.cjs"
+
+if not config.exists():
+    config.write_text(
+        "services:\n  marinara:\n    volumes:\n"
+        + "".join("      - " + m + "\n" for m in mounts)
+        + "    environment:\n"
+        + '      NODE_OPTIONS: "--max-old-space-size=4096 ' + flag + '"\n')
+    print("새 docker-compose.override.yml을 만들었습니다.")
+    raise SystemExit(0)
+
+original = config.read_text()
+if "gacha-choice-runtime.cjs" in original:
+    raise SystemExit("이미 설치되어 있습니다. 중복 추가하지 않습니다.")
+
+# 기존 런타임 패치 마운트(./xxx.cjs:/app/xxx.cjs) 중 마지막 줄 뒤에 추가합니다.
+mount_lines = list(re.finditer(r'(?m)^([ \t]*)- \./[^\s:]+\.cjs:/app/[^\s:]+\.cjs(:ro)?[ \t]*(?=\r?$)', original))
+# NODE_OPTIONS: "..." 또는 - NODE_OPTIONS=... 형식 한 줄만 허용합니다.
+OPT = r'(?m)^([ \t]*(?:NODE_OPTIONS:[ \t]*"|- "?NODE_OPTIONS=))([^"\r\n]*)("?)[ \t]*(?=\r?$)'
+nl = "\r\n" if "\r\n" in original else "\n"
+opts = list(re.finditer(OPT, original))
+if not mount_lines or len(opts) != 1:
+    raise SystemExit("기존 설정 형식이 예상과 다릅니다. 수정하지 않았습니다. 아래 '직접 추가하기'를 참고하세요.")
+
+last = mount_lines[-1]
+indent = last.group(1)
+added = "".join(nl + indent + "- " + m for m in mounts)
+updated = original[:last.end()] + added + original[last.end():]
+opt = list(re.finditer(OPT, updated))[0]
+updated = updated[:opt.start(2)] + opt.group(2).rstrip() + " " + flag + updated[opt.end(2):]
+
+backup = config.with_name(config.name + ".backup." + datetime.now().strftime("%Y%m%d-%H%M%S"))
+shutil.copy2(config, backup)
+config.write_text(updated)
+print("기존 설정 백업:", backup)
+print("기존 NODE_OPTIONS 유지 + 대답 선택지 패치 추가 완료")
+PY
+```
+
+**직접 추가하기** (스크립트가 멈춘 경우): `docker-compose.override.yml`의 `marinara` 서비스에 아래 내용을 **병합**하세요. 파일을 통째로 덮어쓰지 마세요. 이미 `NODE_OPTIONS`가 있다면 새 줄을 만들지 말고 기존 값 끝에 `--require=/app/gacha-choice-runtime.cjs`만 덧붙입니다.
+
+```yaml
+services:
+  marinara:
+    volumes:
+      - ./gacha-choice-runtime.cjs:/app/gacha-choice-runtime.cjs:ro
+      - ./gacha-choice-selftest.cjs:/app/gacha-choice-selftest.cjs:ro
+    environment:
+      NODE_OPTIONS: "--max-old-space-size=4096 --require=/app/gacha-choice-runtime.cjs"
+```
+
+### 4. 설정 확인과 자가 진단
+
+```bash
+docker compose config -q && echo "Docker 설정 정상"
+docker compose run --rm --no-deps --entrypoint node marinara /app/gacha-choice-selftest.cjs /app
+```
+
+**정상 출력 예시**
+
+```text
+Docker 설정 정상
+PASS: server, client and route patches apply to Gacha Forge 1.8.13 and parse
+PASS: beat parser keeps one valid choice per beat and drops broken ones
+PASS: choice frequency (often / sometimes / off) reaches the beat prompt and has a settings route
+```
+
+자가 진단은 데이터 볼륨에 설치된 가챠 포지 파일을 읽기만 합니다. `PASS`가 세 줄 나오지 않으면 다음 단계로 진행하지 마세요.
+
+### 5. 컨테이너 재생성
+
+```bash
+docker compose up -d --force-recreate marinara
+docker compose ps
+```
+
+`marinara` 서비스가 `Up`이면 실행 중입니다.
+
+### 6. 적용 확인
+
+가챠 포지 화면을 한 번 연 뒤 로그를 확인합니다.
+
+```bash
+docker compose logs --since=10m marinara 2>&1 | grep 'gacha-choice'
+```
+
+**정상 출력 예시**
+
+```text
+marinara-1  | [gacha-choice] hook registered
+marinara-1  | [gacha-choice] route hooked for VN choices (in memory)
+marinara-1  | [gacha-choice] reply choices enabled in beat prompt (in memory)
+```
+
+`signature mismatch`가 보이면 가챠 포지 버전이 맞지 않아 **패치가 꺼진 상태**입니다. 게임은 원래대로 동작합니다.
+
+### 업데이트
+
+```bash
+cd /root/Marinara-Engine || exit 1
+cp -a gacha-choice-runtime.cjs "gacha-choice-runtime.cjs.backup.$(date +%Y%m%d-%H%M%S)"
+curl -fL --retry 3 -o gacha-choice-runtime.cjs \
+  https://raw.githubusercontent.com/lemonpie601/Gacha-choice/main/gacha-choice-runtime.cjs
+curl -fL --retry 3 -o gacha-choice-selftest.cjs \
+  https://raw.githubusercontent.com/lemonpie601/Gacha-choice/main/gacha-choice-selftest.cjs
+docker compose run --rm --no-deps --entrypoint node marinara /app/gacha-choice-selftest.cjs /app \
+  && docker compose up -d --force-recreate marinara
+```
+
+### 제거
+
+3단계에서 만든 `docker-compose.override.yml.backup.*` 파일로 되돌리거나, 추가된 두 줄의 마운트와 `--require=/app/gacha-choice-runtime.cjs`를 지운 뒤 `docker compose up -d --force-recreate marinara`를 실행하세요. 3단계에서 `override` 파일을 새로 만들었다면 그 파일을 지워도 됩니다.
 
 ## 끄기
 
