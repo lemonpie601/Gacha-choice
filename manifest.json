@@ -1,0 +1,14 @@
+{
+  "kind": "marinara.personal-extension",
+  "version": 1,
+  "config": {
+    "name": "Gacha Choice · 대답 선택지",
+    "version": "1.0.0",
+    "description": "가챠 포지 설정 → 서술·고급에 대답 선택지 빈도(자주·가끔·끄기) 설정을 추가합니다. 서버 패치 gacha-choice-runtime.cjs와 함께 사용합니다.",
+    "runtime": "client",
+    "capabilities": [
+      "full_page_access"
+    ],
+    "jsPath": "extension.js"
+  }
+}
