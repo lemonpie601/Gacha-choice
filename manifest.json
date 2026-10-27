@@ -3,7 +3,7 @@
   "version": 1,
   "config": {
     "name": "Gacha Choice · 대답 선택지",
-    "version": "2.0.0",
+    "version": "2.0.1",
     "description": "가챠 포지 설정 목록에 “대답 선택지” 항목을 추가해 선택지 빈도·수·답 개수와 선택 키를 정합니다. 서버 패치 gacha-choice-runtime.cjs와 함께 사용합니다.",
     "runtime": "client",
     "capabilities": [

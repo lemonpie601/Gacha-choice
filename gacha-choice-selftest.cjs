@@ -26,7 +26,8 @@ assert.ok(client && client !== clientSrc, 'client.js anchors not found');
 syntax('client.mjs', client);
 assert.equal(P.transformClient(client), client, 'client patch must apply once only');
 assert.ok(client.includes('ev.code===kc') && client.includes('"gch-key-code"') && !client.includes('addEventListener("wheel",wh'), 'pick key (default F) is in the client patch; wheel picking is gone');
-assert.ok(client.includes('/api/gacha-forge/choice-pick') && client.includes('Lg=__gchLog()'), 'picks are saved and shown in the backlog');
+assert.ok(client.includes('/api/gacha-forge/choice-pick') && client.includes('c.key&&__gchSend(c.key,c.picked)') && client.includes('Lg=__gchLog()'), 'picks are saved and shown in the backlog');
+assert.ok(client.includes('"x-marinara-csrf":"1"') && client.includes('function __gchNote()'), 'picks send the CSRF header; unsaved picks get a notice');
 const route = P.transformRoute(fs.readFileSync(path.join(root, 'packages', 'server', 'dist', 'routes', 'capability-packages.routes.js'), 'utf8'));
 assert.ok(route, 'route anchor not found');
 syntax('route.mjs', route);
@@ -75,4 +76,39 @@ assert.equal(expand(seg(1))[1].place, 'Hall');
 assert.deepEqual(expand(seg(undefined)).map((x) => x.text), ['Q?', 'next']);
 assert.ok(server.includes('function jo(e){return __gchJo0(__gchExpand(e))}'));
 console.log('PASS: the picked answer is part of the story text sent to later beats');
-fs.rmSync(tmp, { recursive: true, force: true });
+
+// 5) Saving a pick retries, keeps failed picks for the notice, and stops on errors a retry cannot fix.
+(async () => {
+  const run = async (replies) => {
+    const sent = [], notes = [];
+    globalThis.__gchPend = undefined;
+    const fetch = async (url, init) => {
+      sent.push(init.headers['x-marinara-csrf']);
+      const r = replies[Math.min(sent.length, replies.length) - 1];
+      if (r === 'offline') throw TypeError('Failed to fetch');
+      return { ok: r.status === 200, status: r.status, json: async () => r.body };
+    };
+    const send = new Function('fetch', 'setTimeout', 'notes', 'let __gchNote=()=>notes.push([...globalThis.__gchPend.values()].filter(e=>e.fail).length);' + P.C_SAVE + 'return [__gchSend,__gchTry];')(fetch, (f) => f(), notes);
+    send[0]('key123', 1);
+    for (let i = 0; i < 20; i += 1) await new Promise((z) => setImmediate(z));
+    return { sent, notes, pend: globalThis.__gchPend, retry: send[1] };
+  };
+  const ok = { status: 200, body: { ok: true } };
+  let r = await run([ok]);
+  assert.deepEqual(r.sent, ['1'], 'saved on the first try, with the CSRF header');
+  assert.equal(r.pend.size, 0); assert.equal(r.notes.at(-1), 0);
+  r = await run(['offline', { status: 200, body: { ok: false, error: 'write-conflict' } }, ok]);
+  assert.equal(r.sent.length, 3, 'network errors and write conflicts are retried'); assert.equal(r.pend.size, 0);
+  r = await run(['offline']);
+  assert.equal(r.sent.length, 3); assert.equal(r.notes.at(-1), 1, 'after 3 failed tries the notice shows 1 unsaved pick');
+  const e = r.pend.get('key123');
+  await r.retry('key123', e);
+  assert.equal(r.notes.at(-1), 1, 'retry while still offline keeps the notice');
+  r = await run([{ status: 404, body: { error: 'Not Found' } }]);
+  assert.equal(r.sent.length, 1, 'a missing route is not retried'); assert.equal(r.notes.at(-1), 1);
+  r = await run([{ status: 200, body: { ok: false, error: 'bad-request' } }]);
+  assert.equal(r.sent.length, 1, 'a bad request is not retried');
+  globalThis.__gchPend = undefined;
+  console.log('PASS: picks are retried, and unsaved ones are kept for the notice');
+  fs.rmSync(tmp, { recursive: true, force: true });
+})().catch((err) => { fs.rmSync(tmp, { recursive: true, force: true }); console.error(err); process.exitCode = 1; });

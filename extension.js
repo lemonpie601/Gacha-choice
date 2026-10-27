@@ -1,4 +1,4 @@
-/* Gacha Choice v2.0.0 — personal extension for Gacha Forge 1.8.13 on Marinara Engine.
+/* Gacha Choice v2.0.1 — personal extension for Gacha Forge 1.8.13 on Marinara Engine.
  * Adds "대답 선택지" to the game's Settings rail, with its own page drawn from the game's classes
  * (st-sect / st-plate / st-chips / st-chip) so it follows the chosen UI style. The page reads and sets how often
  * new story beats get reply choices, how many per beat and how many answers each, plus the pick key; the choices
@@ -43,7 +43,8 @@
     const res = await fetch(API, {
       method,
       credentials: "same-origin",
-      headers: body ? { "Content-Type": "application/json" } : undefined,
+      // Marinara's CSRF guard expects this header on writes, as the app's own requests send it.
+      headers: body ? { "Content-Type": "application/json", "x-marinara-csrf": "1" } : undefined,
       body: body ? JSON.stringify(body) : undefined,
     });
     if (res.status === 404) throw Object.assign(Error("missing"), { code: "missing" });

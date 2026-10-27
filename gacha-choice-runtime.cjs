@@ -5,7 +5,8 @@
 //         GET/POST /api/gacha-forge/choice-settings  reads and sets frequency, choices per beat and answers per choice.
 //         POST /api/gacha-forge/choice-pick           saves the answer the player picked.
 // Client: the VN shows the options, plays the picked option's 1-3 lines, then continues with the same next segment;
-//         a saved answer replays without asking again, and the backlog shows it.
+//         a saved answer replays without asking again, and the backlog shows it. A pick that cannot be saved is
+//         retried, then a notice offers 다시 시도.
 // Load via NODE_OPTIONS --require. Every replacement checks its anchor first; on mismatch nothing is changed.
 const { registerHooks } = require('node:module');
 const { fileURLToPath } = require('node:url');
@@ -105,8 +106,27 @@ const C_CSS = '.gch-menu{display:flex;flex-direction:column;align-items:flex-end
   A('signal') + '.gch-opt::before{border-radius:0;transform:none;width:.35em}' +
   A('ember') + '.gch-opt{clip-path:none;border-radius:.5em;background:color-mix(in srgb,var(--surface,#53381F) 94%,transparent);color:var(--on-surface,#F0D9A8)}' +
   '@keyframes gch-in{to{opacity:1;transform:none}}@media(prefers-reduced-motion:reduce){.gch-opt{animation:none;opacity:1;transform:none}}';
+// Saving a pick: up to 3 tries; picks still unsaved stay in globalThis.__gchPend (key -> {v, fail}) for the notice.
+// Sends Marinara's CSRF header like the app's own requests. A missing route (404) or bad-request is not retried.
+const C_SAVE = 'function __gchSend(k,v){let P=globalThis.__gchPend||(globalThis.__gchPend=new Map),e={v,fail:!1};P.set(k,e);__gchTry(k,e)}' +
+  'async function __gchTry(k,e){let P=globalThis.__gchPend;e.fail=!1;__gchNote();for(let t=0;t<3;t+=1){if(t)await new Promise(z=>setTimeout(z,t*2e3));if(P.get(k)!==e)return;let r=null,j=null;' +
+  'try{r=await fetch("/api/gacha-forge/choice-pick",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json","x-marinara-csrf":"1"},body:JSON.stringify({key:k,option:e.v})});j=await r.json().catch(()=>null)}catch{}' +
+  'if(P.get(k)!==e)return;if(r&&r.ok&&j&&j.ok===!0){P.delete(k);__gchNote();return}if(r&&(r.status===404||j&&j.error==="bad-request"))break}e.fail=!0;__gchNote()}';
+// The notice for picks that could not be saved: one per page, with 다시 시도 (retry them) and 닫기 (give them up).
+// It keeps its taps to itself so the VN does not advance underneath it.
+const C_NOTE = 'function __gchNote(){let P=globalThis.__gchPend,n=0;P&&P.forEach(e=>e.fail&&(n+=1));let w=globalThis.__gchNoteEl;' +
+  'if(!n){w&&w.remove();globalThis.__gchNoteEl=null;return}' +
+  'if(!w||!w.isConnected){w&&w.remove();w=document.createElement("div");w.setAttribute("role","alert");' +
+  'w.style.cssText="position:fixed;left:50%;top:1em;transform:translateX(-50%);z-index:2147483000;display:flex;flex-wrap:wrap;align-items:center;gap:.5em .8em;box-sizing:border-box;max-width:calc(100% - 2em);padding:.6em .9em;' +
+  'background:var(--ink-2,#151D2C);color:var(--text,#EDF1F6);border:1px solid var(--coral,#F2603C);border-radius:6px;font:14px/1.45 system-ui,sans-serif;box-shadow:0 .3em 1em rgba(0,0,0,.4)";' +
+  'let tx=document.createElement("span"),bt=(t,f)=>{let b=document.createElement("button");b.type="button";b.textContent=t;' +
+  'b.style.cssText="all:unset;cursor:pointer;padding:.25em .8em;border-radius:4px;border:1px solid var(--coral,#F2603C);white-space:nowrap";b.addEventListener("click",f);return b};' +
+  'w.append(tx,bt("다시 시도",()=>P.forEach((e,k)=>e.fail&&__gchTry(k,e))),bt("닫기",()=>{P.forEach((e,k)=>e.fail&&P.delete(k));__gchNote()}));' +
+  '["click","pointerdown","pointerup","mousedown","mouseup","touchstart","touchend"].forEach(t=>w.addEventListener(t,ev=>ev.stopPropagation()));' +
+  '(o&&o.isConnected?o:document.body).append(w);globalThis.__gchNoteEl=w}' +
+  'w.firstChild.textContent="고른 답 "+n+"개를 서버에 저장하지 못했습니다. 이대로면 다른 기기나 다시 보기에서 선택지가 다시 뜹니다."}';
 const C_JE_OLD = 'function je(){if(P(),I){$e(a[_]);return}_<a.length-1&&(_+=1,Ee(a[_],!0))}';
-const C_JE_NEW = 'let __gchB=null,__gchM=null,__gchK=null;' +
+const C_JE_NEW = 'let __gchB=null,__gchM=null,__gchK=null;' + C_SAVE + C_NOTE +
   'function __gchX(){__gchM&&(__gchM.remove(),__gchM=null);__gchK&&(__gchK(),__gchK=null)}' +
   // Plays an option's lines in place of the next tap; they share the choice line's place and number (09 / 91).
   'function __gchPlay(s,x){__gchB={l:x.lines.map(y=>{let z={...s,speaker:String(y.speaker||""),text:String(y.text||"")};delete z.choice;y.thought?z.thought=!0:delete z.thought;return z}),k:0};Ee(__gchB.l[0],!0)}' +
@@ -120,7 +140,7 @@ const C_JE_NEW = 'let __gchB=null,__gchM=null,__gchK=null;' +
   'let kc="KeyF";try{kc=localStorage.getItem("gch-key-code")||kc}catch{}' +
   'for(let x of os){let b=document.createElement("button");b.type="button";b.className="gch-opt";b.textContent=String(x.label);' +
   'b.addEventListener("click",ev=>{ev.stopPropagation();__gchX();c.picked=c.options.indexOf(x);' +
-  'c.key&&fetch("/api/gacha-forge/choice-pick",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify({key:c.key,option:c.picked})}).catch(()=>{});' +
+  'c.key&&__gchSend(c.key,c.picked);' +
   '__gchPlay(s,x)});m.append(b)}' +
   'm.addEventListener("click",ev=>ev.stopPropagation());' +
   'let dk=n.parentNode,bar=dk.querySelector(".vn-bar");dk.insertBefore(m,bar&&bar.parentNode===dk?bar:n);__gchM=m;h&&(h.hidden=!0);' +
@@ -201,4 +221,4 @@ if (process.env.GF_CHOICE_TEST !== '1') {
     process.stderr.write(TAG + ' hook registered\n');
   }
 }
-module.exports = { transformServer, transformClient, transformRoute, SERVER_EDITS, CLIENT_EDITS, FREQS };
+module.exports = { transformServer, transformClient, transformRoute, SERVER_EDITS, CLIENT_EDITS, C_SAVE, FREQS };
