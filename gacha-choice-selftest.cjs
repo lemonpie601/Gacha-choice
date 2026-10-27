@@ -79,24 +79,28 @@ console.log('PASS: the picked answer is part of the story text sent to later bea
 
 // 5) Saving a pick retries, keeps failed picks for the notice, and stops on errors a retry cannot fix.
 (async () => {
-  const run = async (replies) => {
-    const sent = [], notes = [];
+  const run = async (replies, secret = '') => {
+    const sent = [], notes = [], admin = [];
     globalThis.__gchPend = undefined;
     const fetch = async (url, init) => {
-      sent.push(init.headers['x-marinara-csrf']);
+      sent.push(init.headers['x-marinara-csrf']); admin.push(init.headers['X-Admin-Secret']);
       const r = replies[Math.min(sent.length, replies.length) - 1];
       if (r === 'offline') throw TypeError('Failed to fetch');
       return { ok: r.status === 200, status: r.status, json: async () => r.body };
     };
-    const send = new Function('fetch', 'setTimeout', 'notes', 'let __gchNote=()=>notes.push([...globalThis.__gchPend.values()].filter(e=>e.fail).length);' + P.C_SAVE + 'return [__gchSend,__gchTry];')(fetch, (f) => f(), notes);
+    const localStorage = { getItem: (k) => (k === 'marinara_admin_secret' ? secret : null) };
+    const send = new Function('fetch', 'setTimeout', 'notes', 'localStorage', 'let __gchNote=()=>notes.push([...globalThis.__gchPend.values()].filter(e=>e.fail).length);' + P.C_SAVE + 'return [__gchSend,__gchTry];')(fetch, (f) => f(), notes, localStorage);
     send[0]('key123', 1);
     for (let i = 0; i < 20; i += 1) await new Promise((z) => setImmediate(z));
-    return { sent, notes, pend: globalThis.__gchPend, retry: send[1] };
+    return { sent, notes, admin, pend: globalThis.__gchPend, retry: send[1] };
   };
   const ok = { status: 200, body: { ok: true } };
   let r = await run([ok]);
   assert.deepEqual(r.sent, ['1'], 'saved on the first try, with the CSRF header');
   assert.equal(r.pend.size, 0); assert.equal(r.notes.at(-1), 0);
+  assert.deepEqual(r.admin, [undefined], 'no admin secret header when this browser has none (this PC)');
+  r = await run([ok], ' s3cret ');
+  assert.deepEqual(r.admin, ['s3cret'], 'the admin secret is sent the way the game sends it, for other devices');
   r = await run(['offline', { status: 200, body: { ok: false, error: 'write-conflict' } }, ok]);
   assert.equal(r.sent.length, 3, 'network errors and write conflicts are retried'); assert.equal(r.pend.size, 0);
   r = await run(['offline']);
@@ -106,9 +110,11 @@ console.log('PASS: the picked answer is part of the story text sent to later bea
   assert.equal(r.notes.at(-1), 1, 'retry while still offline keeps the notice');
   r = await run([{ status: 404, body: { error: 'Not Found' } }]);
   assert.equal(r.sent.length, 1, 'a missing route is not retried'); assert.equal(r.notes.at(-1), 1);
+  r = await run([{ status: 403, body: { error: 'Invalid or missing X-Admin-Secret header' } }]);
+  assert.equal(r.sent.length, 1, 'a refused request is not retried'); assert.equal(r.notes.at(-1), 1);
   r = await run([{ status: 200, body: { ok: false, error: 'bad-request' } }]);
   assert.equal(r.sent.length, 1, 'a bad request is not retried');
   globalThis.__gchPend = undefined;
-  console.log('PASS: picks are retried, and unsaved ones are kept for the notice');
+  console.log('PASS: picks send the admin secret like the game, are retried, and unsaved ones are kept for the notice');
   fs.rmSync(tmp, { recursive: true, force: true });
 })().catch((err) => { fs.rmSync(tmp, { recursive: true, force: true }); console.error(err); process.exitCode = 1; });

@@ -107,11 +107,14 @@ const C_CSS = '.gch-menu{display:flex;flex-direction:column;align-items:flex-end
   A('ember') + '.gch-opt{clip-path:none;border-radius:.5em;background:color-mix(in srgb,var(--surface,#53381F) 94%,transparent);color:var(--on-surface,#F0D9A8)}' +
   '@keyframes gch-in{to{opacity:1;transform:none}}@media(prefers-reduced-motion:reduce){.gch-opt{animation:none;opacity:1;transform:none}}';
 // Saving a pick: up to 3 tries; picks still unsaved stay in globalThis.__gchPend (key -> {v, fail}) for the notice.
-// Sends Marinara's CSRF header like the app's own requests. A missing route (404) or bad-request is not retried.
-const C_SAVE = 'function __gchSend(k,v){let P=globalThis.__gchPend||(globalThis.__gchPend=new Map),e={v,fail:!1};P.set(k,e);__gchTry(k,e)}' +
+// Sends Marinara's CSRF header like the app's own requests. Package routes need X-Admin-Secret from any device but
+// this PC (loopback), so it is sent the way the game's own requests do: from localStorage "marinara_admin_secret".
+// A refused (401/403), missing (404) or bad request is not retried.
+const C_SAVE = 'function __gchHd(){let h={"Content-Type":"application/json","x-marinara-csrf":"1"};try{let s=(localStorage.getItem("marinara_admin_secret")||"").trim();s&&(h["X-Admin-Secret"]=s)}catch{}return h}' +
+  'function __gchSend(k,v){let P=globalThis.__gchPend||(globalThis.__gchPend=new Map),e={v,fail:!1};P.set(k,e);__gchTry(k,e)}' +
   'async function __gchTry(k,e){let P=globalThis.__gchPend;e.fail=!1;__gchNote();for(let t=0;t<3;t+=1){if(t)await new Promise(z=>setTimeout(z,t*2e3));if(P.get(k)!==e)return;let r=null,j=null;' +
-  'try{r=await fetch("/api/gacha-forge/choice-pick",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json","x-marinara-csrf":"1"},body:JSON.stringify({key:k,option:e.v})});j=await r.json().catch(()=>null)}catch{}' +
-  'if(P.get(k)!==e)return;if(r&&r.ok&&j&&j.ok===!0){P.delete(k);__gchNote();return}if(r&&(r.status===404||j&&j.error==="bad-request"))break}e.fail=!0;__gchNote()}';
+  'try{r=await fetch("/api/gacha-forge/choice-pick",{method:"POST",credentials:"same-origin",headers:__gchHd(),body:JSON.stringify({key:k,option:e.v})});j=await r.json().catch(()=>null)}catch{}' +
+  'if(P.get(k)!==e)return;if(r&&r.ok&&j&&j.ok===!0){P.delete(k);__gchNote();return}if(r&&([401,403,404].includes(r.status)||j&&j.error==="bad-request"))break}e.fail=!0;__gchNote()}';
 // The notice for picks that could not be saved: one per page, with 다시 시도 (retry them) and 닫기 (give them up).
 // It keeps its taps to itself so the VN does not advance underneath it.
 const C_NOTE = 'function __gchNote(){let P=globalThis.__gchPend,n=0;P&&P.forEach(e=>e.fail&&(n+=1));let w=globalThis.__gchNoteEl;' +
